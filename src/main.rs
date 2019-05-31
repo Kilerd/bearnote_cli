@@ -1,14 +1,21 @@
 #[macro_use]
 extern crate serde_derive;
 
-use clap::{App, SubCommand, Arg};
-use std::fs::File;
+use std::any::Any;
+use std::fs::{File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
-use std::path::Path;
+use std::io;
 use std::io::prelude::*;
-use crate::store::{Note, NoteFile};
+use std::path::Path;
+use std::process::{Command, Stdio};
+
 use chrono::NaiveDateTime;
+use clap::{App, Arg, SubCommand};
 use colored::*;
+use reqwest::Client;
+
+use crate::store::{Note, NoteFile, PostNote, NoteResponse};
+use std::collections::HashMap;
 
 mod store;
 
@@ -31,7 +38,18 @@ fn main() -> Result<(), std::io::Error> {
                         .long("short")
                         .help("show each note in one line")
                 )
-
+        )
+        .subcommand(
+            SubCommand::with_name("add")
+                .about("add a new note")
+                .version("0.1.0")
+                .author(env!("CARGO_PKG_AUTHORS"))
+                .arg(
+                    Arg::with_name("FILE")
+                        .help("read note's content from the file")
+                        .required(true)
+                        .index(1)
+                )
         )
         .get_matches();
 
@@ -46,6 +64,11 @@ fn main() -> Result<(), std::io::Error> {
         let mut string = String::new();
         let _i = result.read_to_string(&mut string)?;
         let mut notes: NoteFile = toml::from_str(&string).expect("error format");
+
+        if is_short {
+            println!("ID                                      TAGS");
+        }
+
         for note in notes.notes {
             let tags = note.tag
                 .unwrap_or(vec![])
@@ -54,9 +77,8 @@ fn main() -> Result<(), std::io::Error> {
                 .collect::<Vec<String>>()
                 .join(", ");
             if is_short {
-                println!("ID                                      TAGS");
                 println!("{}    {}", note.id.yellow().bold(), tags);
-            }else {
+            } else {
                 println!("ID:        {}", note.id.yellow().bold());
                 if !tags.eq("".into()) {
                     println!("Tags:      {}", tags);
@@ -67,5 +89,54 @@ fn main() -> Result<(), std::io::Error> {
             }
         }
     }
+    if let Some(sub_command_matches) = matches.subcommand_matches("add") {
+        let file_name = sub_command_matches.value_of("FILE").expect("FILE is required");
+
+        let file_path = Path::new(file_name);
+        if !file_path.is_file() || !file_path.exists() {
+            panic!("{} is not file or does not exist", file_name);
+        }
+
+        let extension = file_path.extension().unwrap_or("text".as_ref());
+        let mut file = File::open(file_path)?;
+        let mut buffer = String::new();
+        file.read_to_string(&mut buffer);
+
+        let post_note = PostNote {
+            content: buffer,
+            extension: extension.to_str().map(String::from),
+        };
+        let client = Client::new();
+        let mut response = client.post("http://localhost:8000/n")
+            .json(&post_note)
+            .send()
+            .expect("request error");
+
+        let result1 = response.json::<NoteResponse>().expect("error on derialize note response");
+        let string1 = result1.id.clone();
+        save_note_to_file(result1.into());
+        println!("save as {}", string1.yellow().bold());
+    }
+    Ok(())
+}
+
+fn save_note_to_file(note: Note) -> Result<(), io::Error> {
+    let note_file = dirs::home_dir().map(|path| {
+        path.join(".bearnote.toml")
+    }).expect("not supported platform");
+
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(false)
+        .append(true)
+        .open(note_file)?;
+
+    let mut map: HashMap<String, Vec<Note>> = HashMap::new();
+    let append_note_list = vec![note];
+
+    map.insert(String::from("notes"), append_note_list);
+    let string = toml::to_string(&map).expect("error on serialize note");
+    file.write_all(string.as_bytes());
     Ok(())
 }
