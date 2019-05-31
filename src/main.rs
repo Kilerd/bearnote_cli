@@ -10,12 +10,13 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 use chrono::NaiveDateTime;
-use clap::{App, Arg, SubCommand};
+use clap::{App, Arg, SubCommand, AppSettings};
 use colored::*;
 use reqwest::Client;
 
 use crate::store::{Note, NoteFile, PostNote, NoteResponse};
 use std::collections::HashMap;
+use std::rc::Rc;
 
 mod store;
 
@@ -24,9 +25,14 @@ fn main() -> Result<(), std::io::Error> {
         path.join(".bearnote.toml")
     }).expect("not supported platform");
 
-    let matches = App::new("Bearnote")
+    if !note_file.exists() {
+        let mut file = File::create(note_file.as_os_str())?;
+        file.write_all(b"notes=[]");
+    }
+    let mut app = App::new("Bearnote")
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
+        .setting(AppSettings::ArgRequiredElseHelp)
         .subcommand(
             SubCommand::with_name("list")
                 .about("list all local stored notes")
@@ -50,13 +56,9 @@ fn main() -> Result<(), std::io::Error> {
                         .required(true)
                         .index(1)
                 )
-        )
-        .get_matches();
+        );
+    let matches = app.clone().get_matches();
 
-    if !note_file.exists() {
-        let mut file = File::create(note_file.as_os_str())?;
-        file.write_all(b"notes=[]");
-    }
 
     if let Some(sub_command_matches) = matches.subcommand_matches("list") {
         let is_short = sub_command_matches.occurrences_of("short") > 0;
@@ -88,8 +90,7 @@ fn main() -> Result<(), std::io::Error> {
                 println!("Link:      {}\n", format!("https://www.bearnote.com/n/{}", note.id).white().underline());
             }
         }
-    }
-    if let Some(sub_command_matches) = matches.subcommand_matches("add") {
+    } else if let Some(sub_command_matches) = matches.subcommand_matches("add") {
         let file_name = sub_command_matches.value_of("FILE").expect("FILE is required");
 
         let file_path = Path::new(file_name);
@@ -118,6 +119,7 @@ fn main() -> Result<(), std::io::Error> {
         println!("save as {}", string1.yellow().bold());
     }
     Ok(())
+
 }
 
 fn save_note_to_file(note: Note) -> Result<(), io::Error> {
