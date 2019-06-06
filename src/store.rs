@@ -48,3 +48,18 @@ impl From<NoteResponse> for Note {
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NotePassword {
+    pub password: String
+}
+
+impl NotePassword {
+    
+    pub fn from_str(pw: impl Into<String>) -> Self {
+        
+        Self {
+            password: pw.into()
+        }
+    }
+}
