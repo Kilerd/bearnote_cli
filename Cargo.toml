@@ -3,6 +3,9 @@ name = "bearnote"
 version = "0.1.0"
 authors = ["Kilerd <blove694@gmail.com>"]
 edition = "2018"
+description = "cli tool for bearnote.com"
+license = "MIT"
+homepage = "https://www.bearnote.com"
 
 [[bin]]
 name = "bearnote"
