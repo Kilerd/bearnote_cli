@@ -132,8 +132,6 @@ fn main() -> Result<(), std::io::Error> {
         let string1 = result1.id.clone();
         save_note_to_file(result1.into());
         println!("save as {}", string1.yellow().bold());
-
-
     } else if let Some(sub_command_matches) = matches.subcommand_matches("delete") {
         let mut result = File::open(note_file.as_os_str())?;
         let mut string = String::new();
@@ -169,13 +167,11 @@ fn main() -> Result<(), std::io::Error> {
                 println!("deleted id {}", note1.id.yellow());
             }
             _ => {
-                println!("cannot found the unique id, please input more precise id".red());
+                println!("{}", "cannot found the unique id, please input more precise id".red());
             }
         }
-
     }
     Ok(())
-
 }
 
 fn save_note_to_file(note: Note) -> Result<(), io::Error> {
